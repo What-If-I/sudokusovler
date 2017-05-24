@@ -15,15 +15,9 @@
 #
 # A solve_sudoku() in this style can be implemented in about 16 lines
 # without making any particular effort to write concise code.
+from copy import deepcopy
 
 
-def grid_indexes():
-    for x in range(0, 9):
-        for y in range(0, 9):
-            yield x, y
-
-
-# TODO: set() on cell should return only value
 class Cell(object):
 
     def __init__(self, value, x, y):
@@ -32,31 +26,27 @@ class Cell(object):
         self.y = y
         self.square = self.calc_square(x, y)
 
-    def __set__(self, instance, value):
-        return self.value
-
     def __hash__(self):
-        return hash(self.value)
+        value = self.value
+        if isinstance(value, set):
+            return hash(str(value))
+        return hash(value)
 
     def __eq__(self, other):
         if isinstance(other, Cell):
             return self.value == other.value
         return self.value == other
 
-    def __cmp__(self, other):
-        if isinstance(other, Cell):
-            return cmp(self.value, other.value)
-        return cmp(self.value, other)
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return str(self.value)
+        return "<Cell> {} at {}, {} sqr:{}".format(self.value, self.x, self.y, self.square)
 
     @staticmethod
     def calc_square(x, y):
-        return x / 3, y / 3
-
-    def __str__(self):
-        return self.value
-
-    def __repr__(self):
-        return "<Cell> {} at {}, {} sqr:{}".format(self.value, self.x, self.y, self.square)
+        return (x / 3 * 3) + y / 3
 
 
 class Grid(object):
@@ -71,9 +61,21 @@ class Grid(object):
         for cell in self.cells:
             yield cell
 
+    def __getitem__(self, item):
+        if isinstance(item, tuple):
+            return self.cells[slice(*item)]
+        else:
+            return self.cells[item]
+
+    def __setitem__(self, key, value):
+        self.cells[key].value = value
+
+    def copy(self):
+        return deepcopy(self)
+
     def row(self, x):
         assert x < 9
-        row_start = x * 8
+        row_start = x * 9
         return self.cells[row_start:row_start + 9]
 
     def column(self, y):
@@ -83,6 +85,11 @@ class Grid(object):
     def square(self, sqr):
         assert sqr < 9
         return [cell for cell in self.cells if cell.square == sqr]
+
+    def show(self):
+        for row in range(9):
+            start = row * 9
+            print self.cells[start:start + 9]
 
 # solve_sudoku should return None
 ill_formed = [[5, 3, 4, 6, 7, 8, 9, 1, 2],
@@ -149,15 +156,6 @@ easy = [[2, 9, 0, 0, 0, 0, 0, 7, 0],
 #         [0,4,0,0,0,0,0,0,7],
 #         [0,0,7,0,0,0,3,0,0]]
 
-def get_elem_square(x, y, grid):
-    x = (int(x / 3) * 3)
-    y = (int(y / 3) * 3)
-    square = []
-    for row in range(x, x + 3):
-        for col in range(y, y + 3):
-            square.append(grid[row][col])
-    return square
-
 
 def find_known_numbers(cell, grid):
     square = grid.square(cell.square)
@@ -166,15 +164,11 @@ def find_known_numbers(cell, grid):
     return set(square + row + col) - {0}
 
 
-def get_column(grid, y):
-    return list(tuple((zip(*grid)))[y])
-
-
 def assume_numbers(grid):
-    guessed_grid = Grid(grid)
+    guessed_grid = grid.copy()
     for cell in guessed_grid:
         if cell == 0:
-            known_numbers = find_known_numbers(cell, guessed_grid)
+            known_numbers = find_known_numbers(cell, grid)
             guess = set(range(1, 10)) - known_numbers
             cell.value = guess
 
@@ -186,36 +180,23 @@ def assume_numbers(grid):
     return guessed_grid
 
 
-def find_equal_set(cell, guessed_grid):
-    for y1, c1 in enumerate(guessed_grid):
-        if cell == c1:
-            return y1
-
-
-def compare_with_list(compare, with_list, position):
-    superset = set()
-    for val in with_list:
-        if isinstance(val, set):
-            superset = superset | val
-    return superset - compare
-
-
 def solve_sudoku(grid):
     found_one = True
     solved = False
+    grid = Grid(grid)
 
     while found_one and not solved:
         found_one = False
         solved = True
         assummed_grid = assume_numbers(grid)
 
-        for cell in assummed_grid:
+        for position, cell in enumerate(assummed_grid):
             if isinstance(cell.value, set):
                 solved = False
 
-                guess = assummed_grid[x][y]
-                if len(guess) == 1:
-                    grid[x][y] = guess.pop()
+                if len(cell.value) == 1:
+                    print "Found value {} at position {},{}".format(cell.value, cell.x+1, cell.y+1)
+                    grid[position] = cell.value.pop()
                     found_one = True
 
     return grid
@@ -225,7 +206,7 @@ from pprint import pprint
 
 # assert get_elem_square(8, 8, easy) == [0, 0, 1, 3, 0, 6, 0, 5, 9]
 pprint(easy)
-for row in solve_sudoku(easy):
-    print(row)
+solved = solve_sudoku(easy)
+solved.show()
 
     # print({1,2,3,} | {2,4,5})
